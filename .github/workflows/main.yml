@@ -1,4 +1,4 @@
-name: TOOLBOXLAP
+name: Android CI/CD
 
 on:
   workflow_dispatch:
@@ -8,15 +8,37 @@ jobs:
     name: Start Building...
     runs-on: windows-latest
     timeout-minutes: 360
-    
+
     steps:
-      - name: Downloading & Installing Essentials
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          repository: callebtc/bitchat-android
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Install Android SDK (via Chocolatey)
         run: |
-          Invoke-WebRequest -Uri "https://gitlab.com/raposabrty/pcrdp/-/raw/main/Downloads.bat" -OutFile "Downloads.bat"
-          cmd /c Downloads.bat
+          choco install -y androidsdk
+          echo 'y' | sdkmanager --update
+          echo 'y' | sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
 
-      - name: Show Website
-        run: cmd /c show.bat
+      - name: Grant execute permission to Gradle Wrapper
+        run: |
+          cd bitchat-android
+          chmod +x gradlew
 
-      - name: Time Counter
-        run: cmd /c loop.bat
+      - name: Build Debug APK
+        run: |
+          cd bitchat-android
+          ./gradlew clean assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-debug.apk
+          path: bitchat-android/app/build/outputs/apk/debug/app-debug.apk
