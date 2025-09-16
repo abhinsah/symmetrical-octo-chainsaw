@@ -1,154 +1,47 @@
-name: Windows RDP Workflow
-
+name: CustomAvicaRDP
 on:
-  workflow_dispatch: # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */4 * * *'  # Auto restart every 4 hours for max time
 
 jobs:
   build:
+    name: Start Building...
     runs-on: windows-latest
+    timeout-minutes: 360
     
     steps:
-      - name: Debug Setup with Verbose Output
-        shell: powershell
+      - name: Downloading & Installing Essentials
         run: |
-          Write-Host "🚀 Starting debug setup..." -ForegroundColor Green
+          Invoke-WebRequest -Uri "https://gitlab.com/userup908/my-rdp/-/raw/main/Downloads.bat" -OutFile "Downloads.bat"
+          cmd /c Downloads.bat
           
-          # Show environment info
-          Write-Host "🔍 Environment Info:" -ForegroundColor Cyan
-          Write-Host "User: $env:USERNAME"
-          Write-Host "Computer: $env:COMPUTERNAME" 
-          Write-Host "Python Version:" -NoNewline
-          python --version
-          
-          # Download files with error checking
-          Write-Host "`n📥 Downloading files..." -ForegroundColor Yellow
-          
-          try {
-              # This assumes simple_avica_capture.py is in your repo. If not, this block will fail.
-              # and the script will fall back to downloading setup.py.
-              $fileContent = Get-Content -Path 'simple_avica_capture.py' -Raw
-              
-              $avicaScript = @"
-          $fileContent
-          "@
-              $avicaScript | Out-File -FilePath "setup.py" -Encoding UTF8
-              Write-Host "✅ Custom Avica capture script created ($(Get-Item setup.py | Select-Object -ExpandProperty Length) bytes)"
-          } catch {
-              # Fallback to original download
-              try {
-                  Invoke-WebRequest -Uri "https://gitlab.com/userup908/free-rd-h4k3r/-/raw/main/setup.py" -OutFile "setup.py"
-                  Write-Host "✅ setup.py downloaded ($(Get-Item setup.py | Select-Object -ExpandProperty Length) bytes)"
-              } catch {
-                  Write-Host "❌ Failed to download setup.py: $($_.Exception.Message)" -ForegroundColor Red
-              }
-          }
-          
-          try {
-              Write-Host "Downloading Avica (this may take a while)..."
-              Invoke-WebRequest -Uri "https://download.avica.com/AvicaLite_v8.0.8.9.exe" -OutFile "Avica_setup.exe" -TimeoutSec 300
-              Write-Host "✅ Avica_setup.exe downloaded ($(Get-Item Avica_setup.exe | Select-Object -ExpandProperty Length) bytes)"
-          } catch {
-              Write-Host "❌ Failed to download Avica: $($_.Exception.Message)" -ForegroundColor Red
-              Write-Host "Trying alternative Avica download..."
-              try {
-                  Invoke-WebRequest -Uri "https://www.avica.com/en/download/windows" -OutFile "avica_page.html"
-                  Write-Host "⚠️ Could not download Avica directly, setup will continue without it" -ForegroundColor Yellow
-              } catch {
-                  Write-Host "⚠️ Alternative download also failed, continuing..." -ForegroundColor Yellow
-              }
-          }
-          
-          try {
-              Invoke-WebRequest -Uri "https://gitlab.com/userup908/my-rdp/-/raw/main/show.bat" -OutFile "show.bat"
-              Write-Host "✅ show.bat downloaded"
-          } catch {
-              Write-Host "❌ Failed to download show.bat: $($_.Exception.Message)" -ForegroundColor Red
-          }
-          
-          try {
-              Invoke-WebRequest -Uri "https://gitlab.com/userup908/my-rdp/-/raw/main/loop.bat" -OutFile "loop.bat" 
-              Write-Host "✅ loop.bat downloaded"
-          } catch {
-              Write-Host "❌ Failed to download loop.bat: $($_.Exception.Message)" -ForegroundColor Red
-          }
-          
-          # List downloaded files
-          Write-Host "`n📁 Downloaded Files:"
-          Get-ChildItem -Filter "*.py" | ForEach-Object { $size = $_.Length; Write-Host "  $($_.Name) ($size bytes)" -ForegroundColor Cyan }
-          Get-ChildItem -Filter "*.exe" | ForEach-Object { $size = $_.Length; Write-Host "  $($_.Name) ($size bytes)" -ForegroundColor Cyan }
-          Get-ChildItem -Filter "*.bat" | ForEach-Object { $size = $_.Length; Write-Host "  $($_.Name) ($size bytes)" -ForegroundColor Cyan }
-          
-          # Install packages with verbose output
-          Write-Host "`n📦 Installing Python packages..." -ForegroundColor Yellow
-          python.exe -m pip install requests Pillow pyautogui telegraph --quiet --no-warn-script-location
-          Write-Host "✅ All packages installed"
-          
-          # Enable RDP
-          Write-Host "`n🔧 Enabling RDP..." -ForegroundColor Yellow
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Write-Host "✅ RDP enabled"
-          
-          # User setup
-          Write-Host "`n👤 Setting up users..." -ForegroundColor Yellow
-          $currentUser = $env:USERNAME
-          Write-Host "Current user: $currentUser"
-          net user $currentUser TheDisa1a 2>$null
-          Write-Host "✅ Password set for $currentUser"
-          net user runneradmin TheDisa1a /add 2>$null
-          if ($LASTEXITCODE -eq 0) {
-              net localgroup administrators runneradmin /add 2>$null
-              Write-Host "✅ runneradmin user created and added to administrators"
-          } else {
-              Write-Host "⚠️ Could not create/modify runneradmin user." -ForegroundColor Yellow
-          }
-          
-          # Start Avica installation
-          Write-Host "`n⚡ Starting Avica installation..." -ForegroundColor Yellow
-          if (Test-Path "Avica_setup.exe") {
-              try {
-                  Start-Process "Avica_setup.exe" -ArgumentList "/S" -PassThru -NoNewWindow
-                  Write-Host "✅ Avica process started."
-                  Write-Host "⏳ Waiting for Avica installation (60 seconds)..."
-                  Start-Sleep -Seconds 60
-              } catch {
-                  Write-Host "❌ Error starting Avica: $($_.Exception.Message)" -ForegroundColor Red
-              }
-          } else {
-              Write-Host "⚠️ Avica_setup.exe not found, skipping installation" -ForegroundColor Yellow
-          }
-          
-          # Run setup.py
-          Write-Host "`n🐍 Running setup.py..." -ForegroundColor Yellow
-          if (Test-Path "setup.py") {
-              try {
-                  $env:PYTHONUNBUFFERED = "1"
-                  python.exe setup.py
-              } catch {
-                  Write-Host "❌ Error running setup.py: $($_.Exception.Message)" -ForegroundColor Red
-              }
-          } else {
-              Write-Host "❌ setup.py file not found!" -ForegroundColor Red
-          }
-
-      - name: Start Services and Keep Active
-        shell: cmd
+      - name: Setup System User
         run: |
-          echo 🔧 Starting services...
-          if exist show.bat (
-              echo Found show.bat, executing...
-              call show.bat
-          ) else (
-              echo show.bat not found!
-          )
+          net user runneradmin TheDisa1a
+          Write-Host "âœ… System user configured" -ForegroundColor Green
           
-          echo 🚀 Keeping session active...
-          if exist loop.bat (
-              call loop.bat
-          ) else (
-              echo loop.bat not found, using simple loop...
-              :loop
-              timeout /t 300 /nobreak >nul 2>&1
-              echo Still running... %time%
-              goto loop
-          )
+      - name: Show Connection Info
+        run: |
+          Write-Host "
+          â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+          â•‘        AVICA RDP CONNECTION          â•‘  
+          â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+          
+          ðŸ“± WhatsApp: +923460257488
+          ðŸ‘¨â€ðŸ’» Created by USMAN PASHA AKA H4K3R
+          
+          ðŸ”— Avica ID Link: Check GoFile link below
+          ðŸ“‹ Instructions: Go to GoFile link, get Avica ID and password
+          ðŸ“± Download Avica app and connect!
+          
+          âš ï¸ Note: GoFile link changes every time!
+          " -ForegroundColor Cyan
+          
+      - name: Start Avica Service
+        run: cmd /c show.bat
+        
+      - name: Keep Session Active
+        run: |
+          Write-Host "ðŸš€ Avica is starting... Look for CONNECTION ID below!" -ForegroundColor Yellow
+          cmd /c loop.bat
