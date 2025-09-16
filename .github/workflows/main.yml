@@ -26,9 +26,12 @@ jobs:
             Write-Host "`n📥 Downloading files..." -ForegroundColor Yellow
             
             try {
-                # Use the improved Avica capture script instead
+                # FIX: Read file content into a variable first to avoid YAML parsing errors
+                $fileContent = Get-Content -Path 'simple_avica_capture.py' -Raw
+                
+                # Use the variable inside the here-string
                 $avicaScript = @"
-$(Get-Content -Path 'simple_avica_capture.py' -Raw)
+$fileContent
 "@
                 $avicaScript | Out-File -FilePath "setup.py" -Encoding UTF8
                 Write-Host "✅ Custom Avica capture script created ($(Get-Item setup.py | Select-Object -ExpandProperty Length) bytes)"
